@@ -1,0 +1,13 @@
+version: '3'
+
+tasks:
+  default:
+    cargo run --quiet
+
+  run:ci-steps:
+      cmds:
+        - cargo test
+        - cargo tarpaulin --verbose
+        - cargo clippy -- -D warnings
+        - cargo fmt -- --check
+        - cargo audit
