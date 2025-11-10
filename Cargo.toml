@@ -3,5 +3,18 @@ name = "zero2prod"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
+[lib]
+path = "src/lib.rs"
 
+[[bin]]
+path = "src/main.rs"
+name = "zero2prod"
+
+[dependencies]
+anyhow = "1.0.100"
+axum = "0.8.6"
+reqwest = "0.12.24"
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "macros", "postgres", "uuid", "migrate", "chrono"]}
+config = "0.15.18"
