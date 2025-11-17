@@ -1,23 +1,60 @@
 use axum::Form;
-use axum::extract::rejection::FormRejection;
+use axum::extract::{FromRequest, Request, State};
 use axum::response::IntoResponse;
-use reqwest::StatusCode;
+use sqlx::PgPool;
+use sqlx::types::chrono::Utc;
+use tracing::{info, instrument};
+use uuid::Uuid;
 
-#[derive(serde::Deserialize)]
+use crate::error::AppError;
+
+#[derive(serde::Deserialize, Debug)]
 pub struct SubscribeForm {
-    name: String,
-    email: String,
+    pub name: String,
+    pub email: String,
 }
 
-pub async fn subscribe(
-    form: Result<Form<SubscribeForm>, FormRejection>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if let Ok(Form(form)) = form {
-        Ok(format!("name = {} email = {}", form.name, form.email))
-    } else {
-        Err((
-            StatusCode::BAD_REQUEST,
-            "name or email is not given".to_string(),
-        ))
+impl<S> FromRequest<S> for SubscribeForm
+where
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let Form(subscribe_form) = Form::<Self>::from_request(req, state)
+            .await
+            .map_err(|err| AppError::ValidationError(err.to_string()))?;
+        Ok(subscribe_form)
     }
+}
+
+#[instrument]
+pub async fn subscribe(
+    State(pool): State<PgPool>,
+    form: SubscribeForm,
+) -> Result<impl IntoResponse, AppError> {
+    let request_id = Uuid::new_v4().to_string();
+    info!(
+        request_id = request_id,
+        "Adding '{}' '{}' as a new subscriber.", form.email, form.name
+    );
+    info!(
+        request_id = request_id,
+        "Saving new subscriber details in the database"
+    );
+    let _row = sqlx::query!(
+        r#"
+        insert into subscriptions (id, email, name, subscribed_at)
+        values ($1, $2, $3, $4)
+        "#,
+        Uuid::new_v4(),
+        form.email,
+        form.name,
+        Utc::now(),
+    )
+    .execute(&pool)
+    .await
+    .map_err(|e| AppError::DatabaseError(e))?;
+    info!(request_id = request_id, "New subscriber have been saved");
+    Ok(())
 }
